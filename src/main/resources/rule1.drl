@@ -1,0 +1,10 @@
+import java.util.List;
+import java.util.Map;
+
+rule "Collect Persons with Name Mohit"
+when
+    $data: List(size > 0)
+    $mohitList: List() from collect(Map(this["name"] == "Mohit") from $data)
+then
+    System.out.println("List of persons with the name Mohit: " + $mohitList);
+end
