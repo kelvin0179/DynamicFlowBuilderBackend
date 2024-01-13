@@ -2,8 +2,10 @@ package com.example.workflow.service;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -23,28 +25,30 @@ public class WorkflowService {
 	@Autowired
 	ConditionalNodeService conditionalNodeService;
 
-	public StringBuilder singleTraversal(StringBuilder currentNodeId,List<Map<?,?>> edges){
+	Map<String,Boolean> visited=new HashMap<String,Boolean>();
+	Queue<String> queue =new LinkedList<>();
+
+	public void singleTraversal(StringBuilder currentNodeId,List<Map<?,?>> edges){
 		for(Map<?,?> edge : edges){
-			if(edge.get("source").equals(currentNodeId.toString())){
-				currentNodeId=new StringBuilder((String)edge.get("target"));
-				break;
+			if(edge.get("source").equals(currentNodeId.toString()) && visited.get(edge.get("target"))==false){
+				visited.put((String)edge.get("target"), true);
+				queue.add((String)edge.get("target"));
 			}
 		}
-		return currentNodeId;
 	}
-	public StringBuilder multiTraversal(StringBuilder currentNodeId,List<Map<?,?>> edges,int direction){
+	public void multiTraversal(StringBuilder currentNodeId,List<Map<?,?>> edges,int direction){
 		for(Map<?,?> edge : edges){
-			if(edge.get("source").equals(currentNodeId.toString()) && (int)edge.get("path")==direction){
-				currentNodeId=new StringBuilder((String)edge.get("target"));
-				break;
+			if(edge.get("source").equals(currentNodeId.toString()) && (int)edge.get("path")==direction && visited.get(edge.get("target"))==false){
+				visited.put((String)edge.get("target"), true);
+				queue.add((String)edge.get("target"));
 			}
 		}
-		return currentNodeId;
 	}
 
 	@SuppressWarnings("unchecked")
-	public StringBuilder executeNode(StringBuilder currentNodeId,StringBuilder parentNodeId,List<Map<?,?>> nodes,List<Map<?,?>> edges) {
+	public void executeNode(StringBuilder currentNodeId,StringBuilder parentNodeId,List<String> parentNodeIds,List<Map<?,?>> nodes,List<Map<?,?>> edges) {
 		Object parentData=null;
+		List<Object> parentDataList=new ArrayList<Object>();
 		Map<String,Object> currentNode=new HashMap<>();
 		for(Map<?,?> node:nodes) {
 			if(node.get("id").equals(currentNodeId.toString())){
@@ -54,35 +58,46 @@ public class WorkflowService {
 		}
 		if(!currentNodeId.toString().equals("0")) {
 			for(Map<?,?> node:nodes) {
-				if(node.get("id").equals(parentNodeId.toString())) {
+				if(parentNodeIds.contains((String)node.get("id"))) {
 					parentData=node.get("data");
-					break;
+					List<?> iterableData=(List<?>)node.get("data");
+					for(Object nodeData: iterableData){
+						parentDataList.add(nodeData);
+					}
 				}
 			}
 		}
 		else{
-			parentData=currentNode.get("requestBody");
+			parentDataList=(List<Object>)currentNode.get("requestBody");
 		}
-		currentNode.put("requestBody", parentData);
+		if(currentNode.get("requestBody")==null){
+			currentNode.put("requestBody", parentDataList);
+		}
 		if(currentNode.get("nodeType").equals("api")){
-			currentNode.put("data", apiNodeService.ApiCall(currentNode));
-			currentNodeId=singleTraversal(currentNodeId, edges);
+			Object tempList = (Object)apiNodeService.ApiCall(currentNode);
+			List<Object> twoDList = new ArrayList<Object>();
+			twoDList.add(tempList);
+			currentNode.put("data", twoDList);
+			singleTraversal(currentNodeId, edges);
 		}
 		else if(currentNode.get("nodeType").equals("filter")){
 			try {
-				currentNode.put("data", filterNodeService.processJson(currentNode.get("requestBody"),(String)currentNode.get("parameter")));
+				Object tempList = (Object)filterNodeService.processJson(currentNode.get("requestBody"),(String)currentNode.get("parameter"));
+				List<Object> twoDList = new ArrayList<Object>();
+				twoDList.add(tempList);
+				currentNode.put("data", twoDList);
 			} catch (JsonProcessingException e) {
 				// TODO Auto-generated catch block
 				e.printStackTrace();
 			}
-			currentNodeId=singleTraversal(currentNodeId, edges);
+			singleTraversal(currentNodeId, edges);
 		}
 		else if(currentNode.get("nodeType").equals("conditional")){
 			int path=conditionalNodeService.executeWithRule((String)currentNode.get("parameter"), currentNode.get("requestBody"));
+			currentNode.put("path", path);
 			currentNode.put("data", currentNode.get("requestBody"));
-			currentNodeId=multiTraversal(currentNodeId, edges, path);
+			multiTraversal(currentNodeId, edges, path);
 		}
-		return currentNodeId;
 	}
 	
 	@SuppressWarnings("unchecked")
@@ -90,30 +105,34 @@ public class WorkflowService {
 		Map<?,?> data=(Map<?, ?>) PayloadConverter.convertToMapOrList(payload);
 		List<Map<?,?>> nodes=(List<Map<?, ?>>) PayloadConverter.convertToMapOrList(data.get("nodes"));
 		List<Map<?,?>> edges=(List<Map<?, ?>>) PayloadConverter.convertToMapOrList(data.get("edges"));
+		String startNodeId=(String)data.get("startNodeId");
 		
-		String nodeId="0";
+		for(Map<?,?> node:nodes){
+			visited.put((String)node.get("id"), false);
+		}
+		queue.add(startNodeId);
+		visited.put(startNodeId, true);
+		String nodeId="";
 		List<String> flow=new ArrayList<>();
-		while(true) {
+		while(!queue.isEmpty()) {
+			nodeId = (String)queue.poll();
 			flow.add(nodeId);
-			int childNodes=0;
 			StringBuilder parentNodeId=new StringBuilder("");
+			List<String> parentNodeIds=new ArrayList<>();
 			for(Map<?,?> edge: edges) {
-				if(edge.get("source").equals(nodeId)) {
-					childNodes++;
-				}
 				if(edge.get("target").equals(nodeId)) {
 					parentNodeId.append(edge.get("source"));
+					parentNodeIds.add((String)edge.get("source"));
 				}
 			}
-			if(childNodes==0) {
-				break;
-			}
 			StringBuilder currentNodeId=new StringBuilder(nodeId);
-			currentNodeId=executeNode(currentNodeId,parentNodeId,nodes,edges);
-			nodeId=currentNodeId.toString();
+			executeNode(currentNodeId,parentNodeId,parentNodeIds,nodes,edges);
 		}
 		Map<String,Object> returnMap = new HashMap<>();
 		returnMap.put("flow",flow);
+		for(Map<?,?> node:nodes){
+			node.remove("requestBody");
+		}
 		returnMap.put("nodes",nodes);
 		return returnMap;
 	}

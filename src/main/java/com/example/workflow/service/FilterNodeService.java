@@ -31,9 +31,8 @@ public class FilterNodeService {
             jsonString = objectMapper.writeValueAsString((List<Map<?, ?>>) jsonData);
         } else {
             // Handle other cases or return an appropriate response
-            return null;
+            return jsonData;
         }
-
         return jsonQueryService.runJsonQuery(jsonString, jsonQuery);
     }
 }
