@@ -25,6 +25,9 @@ public class WorkflowService {
 	@Autowired
 	ConditionalNodeService conditionalNodeService;
 
+	@Autowired
+	OperationNodeService operationNodeService;
+
 	Map<String,Boolean> visited=new HashMap<String,Boolean>();
 	Queue<String> queue =new LinkedList<>();
 
@@ -66,6 +69,7 @@ public class WorkflowService {
 					}
 				}
 			}
+			// System.out.println(parentDataList);
 		}
 		else{
 			parentDataList=(List<Object>)currentNode.get("requestBody");
@@ -97,6 +101,13 @@ public class WorkflowService {
 			currentNode.put("path", path);
 			currentNode.put("data", currentNode.get("requestBody"));
 			multiTraversal(currentNodeId, edges, path);
+		}
+		else if(currentNode.get("nodeType").equals("operation")){
+			Object tempList = (Object)operationNodeService.executeWithRule((String)currentNode.get("parameter"), currentNode.get("requestBody"));
+			List<Object> twoDList = new ArrayList<Object>();
+			twoDList.add(tempList);
+			currentNode.put("data", twoDList);
+			singleTraversal(currentNodeId, edges);
 		}
 	}
 	
@@ -130,9 +141,9 @@ public class WorkflowService {
 		}
 		Map<String,Object> returnMap = new HashMap<>();
 		returnMap.put("flow",flow);
-		for(Map<?,?> node:nodes){
-			node.remove("requestBody");
-		}
+		// for(Map<?,?> node:nodes){
+		// 	node.remove("requestBody");
+		// }
 		returnMap.put("nodes",nodes);
 		return returnMap;
 	}
