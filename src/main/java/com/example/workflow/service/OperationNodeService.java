@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.Serializable;
+import java.util.Map;
 
 import org.kie.api.KieServices;
 import org.kie.api.builder.KieBuilder;
@@ -42,7 +43,7 @@ public class OperationNodeService {
     @Autowired
     private KieContainer kieContainer;
 
-    public Object executeWithRule(String dynamicRule,Object incoming) {
+    public Object executeWithRule(String dynamicRule,Object incoming,Map<String,Object> globalData) {
         // Dynamically update the KieContainer with new rules
         KieServices kieServices = KieServices.Factory.get();
         KieFileSystem kieFileSystem = kieServices.newKieFileSystem();
@@ -60,10 +61,12 @@ public class OperationNodeService {
         kieContainer = kieServices.newKieContainer(kieModule.getReleaseId());
         
         KieSession kieSession=kieContainer.newKieSession();
+        kieSession.setGlobal("globalData", globalData);
         Object data=deepCopy(incoming);
         kieSession.insert(data);
         int rules=kieSession.fireAllRules();
         System.out.println(rules);
+        kieSession.dispose();
         return data;
     }
 }

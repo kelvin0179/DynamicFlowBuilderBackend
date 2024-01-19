@@ -31,6 +31,7 @@ public class WorkflowService {
 	Map<String,Boolean> visited=new HashMap<String,Boolean>();
 	Queue<String> queue =new LinkedList<>();
 
+	Object globalData;
 	public void singleTraversal(StringBuilder currentNodeId,List<Map<?,?>> edges){
 		for(Map<?,?> edge : edges){
 			if(edge.get("source").equals(currentNodeId.toString()) && visited.get(edge.get("target"))==false){
@@ -78,7 +79,7 @@ public class WorkflowService {
 			currentNode.put("requestBody", parentDataList);
 		}
 		if(currentNode.get("nodeType").equals("api")){
-			Object tempList = (Object)apiNodeService.ApiCall(currentNode);
+			Object tempList = (Object)apiNodeService.ApiCall(currentNode,globalData);
 			List<Object> twoDList = new ArrayList<Object>();
 			twoDList.add(tempList);
 			currentNode.put("data", twoDList);
@@ -103,16 +104,17 @@ public class WorkflowService {
 			multiTraversal(currentNodeId, edges, path);
 		}
 		else if(currentNode.get("nodeType").equals("operation")){
-			Object tempList = (Object)operationNodeService.executeWithRule((String)currentNode.get("parameter"), currentNode.get("requestBody"));
+			Object tempList = (Object)operationNodeService.executeWithRule((String)currentNode.get("parameter"), currentNode.get("requestBody"),(Map<String, Object>)globalData);
 			List<Object> twoDList = new ArrayList<Object>();
 			twoDList.add(tempList);
-			currentNode.put("data", twoDList);
+			currentNode.put("data", tempList);
 			singleTraversal(currentNodeId, edges);
 		}
 	}
 	
 	@SuppressWarnings("unchecked")
-	public Object depthFirstSearch(Object payload) {
+	public Object depthFirstSearch(Object payload,Object globalData) {
+		this.globalData = globalData;
 		Map<?,?> data=(Map<?, ?>) PayloadConverter.convertToMapOrList(payload);
 		List<Map<?,?>> nodes=(List<Map<?, ?>>) PayloadConverter.convertToMapOrList(data.get("nodes"));
 		List<Map<?,?>> edges=(List<Map<?, ?>>) PayloadConverter.convertToMapOrList(data.get("edges"));
